@@ -11,7 +11,6 @@ logging.basicConfig(level=logging.DEBUG)
 app = Flask(__name__)
 app.secret_key = os.getenv('MOODIFY_APP_PASSWORD')
 
-# Define the Content Security Policy directives
 csp_directives = {
     'default-src': '\'self\'',
     'script-src': '\'self\' \'unsafe-inline\' https://ajax.googleapis.com',
@@ -21,8 +20,6 @@ csp_directives = {
     'frame-src': '\'self\'',
 }
 
-
-# Set the Content Security Policy header for all responses
 @app.after_request
 def add_csp_header(response):
     csp = '; '.join([f"{directive} {value}" for directive, value in csp_directives.items()])
@@ -43,7 +40,6 @@ def get_playlists():
         'Authorization': f'Bearer {access_token}'
     }
 
-    # Retrieve the user's playlists
     playlists_url = 'https://api.spotify.com/v1/me/playlists'
     playlists_response = make_request(playlists_url, headers)
     playlists_data = json.loads(playlists_response.text)
@@ -67,8 +63,7 @@ def get_playlists():
                 tempo = feature['tempo']
                 tempos.append(tempo)
 
-                # Infer the mood based on your desired logic (e.g., using if-else statements)
-                mood = infer_mood(feature)  # Replace with your own logic
+                mood = infer_mood(feature)  
                 moods.append(mood)
 
             mean_tempo = sum(tempos) / len(tempos)
@@ -122,13 +117,11 @@ def callback():
         return str(e), 400
 
     session['access_token'] = token_info['access_token']
-    session['refresh_token'] = token_info['refresh_token']  # Save the refresh token
+    session['refresh_token'] = token_info['refresh_token']  
     return redirect('/')
 
 
 def infer_mood(features):
-    # Implement your own logic to infer the mood based on the features
-    # Example:
     if features['valence'] > 0.7:
         return 'Happy'
     elif features['valence'] < 0.3:
@@ -142,7 +135,7 @@ def make_request(url, headers):
         retry_after = int(response.headers['Retry-After'])
         time.sleep(retry_after)
         return make_request(url, headers)
-    elif response.status_code == 401:  # Access token has expired
+    elif response.status_code == 401:
         if refresh_access_token():
             headers['Authorization'] = f'Bearer {session["access_token"]}'
             return make_request(url, headers)
