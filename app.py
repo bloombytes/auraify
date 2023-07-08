@@ -1,11 +1,12 @@
-from flask import Flask, render_template, redirect, request, session
-import requests
-import os
-import json
+from flask import Flask, render_template, redirect, request, session, send_file, Response
+import requests, os, json, logging, time, io
+import matplotlib.pyplot as plt
+import numpy as np
 from urllib.parse import urlencode
 from spotipy.oauth2 import SpotifyOAuth
-import logging
-import time
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
+
 logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
@@ -19,6 +20,42 @@ csp_directives = {
     'font-src': '\'self\'',
     'frame-src': '\'self\'',
 }
+
+@app.route('/get_playlist_image/<string:playlist_id>')
+def get_playlist_image(playlist_id):
+    access_token = session['access_token']
+    headers = {
+        'Authorization': f'Bearer {access_token}'
+    }
+
+    tracks_url = f'https://api.spotify.com/v1/playlists/{playlist_id}/tracks'
+    tracks_response = make_request(tracks_url, headers)
+    tracks_data = json.loads(tracks_response.text)
+
+    track_ids = [item['track']['id'] for item in tracks_data['items']]
+    features_url = f'https://api.spotify.com/v1/audio-features/?ids={",".join(track_ids)}'
+    features_response = make_request(features_url, headers)
+    features_data = json.loads(features_response.text)
+
+    valences = [feature['valence'] for feature in features_data['audio_features']]
+    energies = [feature['energy'] for feature in features_data['audio_features']]
+    danceabilities = [feature['danceability'] for feature in features_data['audio_features']]
+
+    avg_valence = sum(valences) / len(valences)
+    avg_energy = sum(energies) / len(energies)
+    avg_danceability = sum(danceabilities) / len(danceabilities)
+
+    fig = Figure()
+    canvas = FigureCanvas(fig)
+    ax = fig.gca()
+
+    colors = [[avg_valence, avg_energy, avg_danceability]]
+    ax.imshow(colors, aspect='auto')
+
+    output = io.BytesIO()
+    FigureCanvas(fig).print_png(output)
+    return Response(output.getvalue(), content_type='image/png')
+
 
 @app.after_request
 def add_csp_header(response):
@@ -69,11 +106,11 @@ def get_playlists():
             mean_tempo = sum(tempos) / len(tempos)
             most_common_mood = max(set(moods), key=moods.count)
             playlist_details.append({
+                'id': playlist['id'], # Add this line
                 'name': playlist['name'],
                 'tempo': mean_tempo,
                 'mood': most_common_mood
             })
-
         return json.dumps(playlist_details)
     else:
         logging.error("No items in playlists_data. Response was: %s", playlists_data)

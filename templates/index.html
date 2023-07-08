@@ -3,7 +3,6 @@
 <head>
   <title>Auraify - Pre-Alpha</title>
   <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 </head>
 <body>
   <div id="loading" style="display: none;">
@@ -16,16 +15,19 @@
   </div>
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
   <script>
-    $(document).ready(function() {
-      $('#loading').show();
-      $('#content').hide();
-      $.getJSON('/get_playlists', function(data) {
+    $.getJSON('/get_playlists', function(data) {
         $.each(data, function(i, playlist) {
-          $('#playlists').append('<li><h3>' + playlist['name'] + '</h3><p>Tempo: ' + playlist['tempo'] + ' BPM</p><p>Mood: ' + playlist['mood'] + '</p></li>');
+            var img = $('<img />', {
+                src: '/get_playlist_image/' + playlist['id'],
+                alt: playlist['name'] + ' image'
+            });
+            var listItem = $('<li></li>');
+            listItem.append('<h3>' + playlist['name'] + '</h3><p>Tempo: ' + playlist['tempo'] + ' BPM</p><p>Mood: ' + playlist['mood'] + '</p>');
+            listItem.append(img);
+            $('#playlists').append(listItem);
         });
         $('#loading').hide();
         $('#content').show();
-      });
     });
   </script>
 </body>
