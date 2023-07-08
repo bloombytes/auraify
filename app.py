@@ -1,11 +1,7 @@
-from flask import Flask, render_template, redirect, request, session, send_file, Response
-import requests, os, json, logging, time, io
-import matplotlib.pyplot as plt
-import numpy as np
+from flask import Flask, render_template, redirect, request, session
+import requests, os, json, logging, time
 from urllib.parse import urlencode
 from spotipy.oauth2 import SpotifyOAuth
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -14,48 +10,20 @@ app.secret_key = os.getenv('MOODIFY_APP_PASSWORD')
 
 csp_directives = {
     'default-src': '\'self\'',
-    'script-src': '\'self\' \'unsafe-inline\' https://ajax.googleapis.com',
+    'script-src': '\'self\' \'unsafe-inline\' https://ajax.googleapis.com https://cdn.jsdelivr.net',
     'style-src': '\'self\' \'unsafe-inline\'',
     'img-src': '\'self\' data:',
     'font-src': '\'self\'',
     'frame-src': '\'self\'',
 }
 
-@app.route('/get_playlist_image/<string:playlist_id>')
-def get_playlist_image(playlist_id):
-    access_token = session['access_token']
-    headers = {
-        'Authorization': f'Bearer {access_token}'
-    }
-
-    tracks_url = f'https://api.spotify.com/v1/playlists/{playlist_id}/tracks'
-    tracks_response = make_request(tracks_url, headers)
-    tracks_data = json.loads(tracks_response.text)
-
-    track_ids = [item['track']['id'] for item in tracks_data['items']]
-    features_url = f'https://api.spotify.com/v1/audio-features/?ids={",".join(track_ids)}'
-    features_response = make_request(features_url, headers)
-    features_data = json.loads(features_response.text)
-
-    valences = [feature['valence'] for feature in features_data['audio_features']]
-    energies = [feature['energy'] for feature in features_data['audio_features']]
-    danceabilities = [feature['danceability'] for feature in features_data['audio_features']]
-
-    avg_valence = sum(valences) / len(valences)
-    avg_energy = sum(energies) / len(energies)
-    avg_danceability = sum(danceabilities) / len(danceabilities)
-
-    fig = Figure()
-    canvas = FigureCanvas(fig)
-    ax = fig.gca()
-
-    colors = [[avg_valence, avg_energy, avg_danceability]]
-    ax.imshow(colors, aspect='auto')
-
-    output = io.BytesIO()
-    FigureCanvas(fig).print_png(output)
-    return Response(output.getvalue(), content_type='image/png')
-
+@app.route('/switch_mode')
+def switch_mode():
+    if 'mode' not in session or session['mode'] == 'Layered':
+        session['mode'] = 'Spectrum'
+    else:
+        session['mode'] = 'Layered'
+    return redirect('/')
 
 @app.after_request
 def add_csp_header(response):
@@ -68,7 +36,11 @@ def index():
     if 'access_token' not in session:
         return redirect('/login')
 
-    return render_template('index.html')
+    if 'mode' not in session:
+        session['mode'] = 'Spectrum'
+
+    print(f"Current mode: {session['mode']}")  # Debugging line
+    return render_template('index.html', mode=session['mode'])
 
 @app.route('/get_playlists')
 def get_playlists():
@@ -94,6 +66,10 @@ def get_playlists():
             features_response = make_request(features_url, headers)
             features_data = json.loads(features_response.text)
 
+            valences = [feature['valence'] for feature in features_data['audio_features']]
+            energies = [feature['energy'] for feature in features_data['audio_features']]
+            danceabilities = [feature['danceability'] for feature in features_data['audio_features']]
+
             tempos = []
             moods = []
             for feature in features_data['audio_features']:
@@ -106,17 +82,17 @@ def get_playlists():
             mean_tempo = sum(tempos) / len(tempos)
             most_common_mood = max(set(moods), key=moods.count)
             playlist_details.append({
-                'id': playlist['id'], # Add this line
+                'id': playlist['id'],
                 'name': playlist['name'],
                 'tempo': mean_tempo,
-                'mood': most_common_mood
+                'mood': most_common_mood,
+                'valences': valences,
+                'energies': energies,
+                'danceabilities': danceabilities
             })
         return json.dumps(playlist_details)
     else:
         logging.error("No items in playlists_data. Response was: %s", playlists_data)
-
-
-    
 
 @app.route('/login')
 def login():
@@ -148,7 +124,7 @@ def callback():
         return "Code not found in callback", 400
 
     try:
-        token_info = sp_oauth.get_access_token(code)
+        token_info = sp_oauth.get_cached_token()
     except Exception as e:
         logging.error(f"ERROR retrieving access token: {e}")
         return str(e), 400
@@ -156,7 +132,6 @@ def callback():
     session['access_token'] = token_info['access_token']
     session['refresh_token'] = token_info['refresh_token']  
     return redirect('/')
-
 
 def infer_mood(features):
     if features['valence'] > 0.7:
