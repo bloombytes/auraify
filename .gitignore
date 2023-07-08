@@ -1,0 +1,6 @@
+.cache
+docker-compose-test.yml
+test.py
+temp.sh
+__pycache__
+env
