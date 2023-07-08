@@ -6,7 +6,7 @@ from spotipy.oauth2 import SpotifyOAuth
 logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
-app.secret_key = os.getenv('MOODIFY_APP_PASSWORD')
+app.secret_key = os.getenv('AURAIFY_APP_PASSWORD')
 
 csp_directives = {
     'default-src': '\'self\'',
